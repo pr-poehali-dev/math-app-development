@@ -594,36 +594,157 @@ function HomePage({
 }
 
 // ─── Тесты ───────────────────────────────────────────────────────
-function TestsPage({ startTest }: { startTest: (t: TestDef) => void }) {
+const DIFFICULTY_ORDER: Record<string, number> = { "Лёгкий": 0, "Средний": 1, "Сложный": 2 };
+const DIFF_COLORS: Record<string, string> = {
+  "Лёгкий": "bg-emerald-100 text-emerald-700",
+  "Средний": "bg-amber-100 text-amber-700",
+  "Сложный": "bg-rose-100 text-rose-700",
+};
+
+function TestsPage({ startTest, records }: { startTest: (t: TestDef) => void; records: TestRecord[] }) {
+  const [filter, setFilter] = React.useState<"all" | "Лёгкий" | "Средний" | "Сложный">("all");
+  const [sort, setSort] = React.useState<"default" | "best" | "attempts">("default");
+
+  const getTestStats = (id: number) => {
+    const recs = records.filter((r) => r.testId === id);
+    if (!recs.length) return null;
+    const best = Math.max(...recs.map((r) => Math.round((r.correct / r.total) * 100)));
+    return { attempts: recs.length, best };
+  };
+
+  const filtered = TESTS.filter((t) => filter === "all" || t.difficulty === filter);
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "best") {
+      const sa = getTestStats(a.id)?.best ?? -1;
+      const sb = getTestStats(b.id)?.best ?? -1;
+      return sb - sa;
+    }
+    if (sort === "attempts") {
+      const sa = getTestStats(a.id)?.attempts ?? 0;
+      const sb = getTestStats(b.id)?.attempts ?? 0;
+      return sb - sa;
+    }
+    return DIFFICULTY_ORDER[a.difficulty] - DIFFICULTY_ORDER[b.difficulty];
+  });
+
+  const totalDone = TESTS.filter((t) => getTestStats(t.id)).length;
+  const totalCorrectAll = records.reduce((s, r) => s + r.correct, 0);
+  const totalAll = records.reduce((s, r) => s + r.total, 0);
+  const overallAcc = totalAll ? Math.round((totalCorrectAll / totalAll) * 100) : null;
+
   return (
     <div className="animate-fade-in space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Тесты</h1>
         <p className="text-muted-foreground text-sm mt-1">Выбери тему и начни прямо сейчас</p>
       </div>
-      <div className="space-y-3">
-        {TESTS.map((t, i) => (
-          <button
-            key={t.id}
-            onClick={() => startTest(t)}
-            className={`w-full ${t.color} border rounded-2xl p-4 flex items-center gap-3 card-hover text-left animate-slide-up`}
-            style={{ animationDelay: `${i * 0.07}s` }}
-          >
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center shadow-sm flex-shrink-0`}>
-              <Icon name={t.icon} size={20} className="text-white" />
+
+      {/* Итоговые карточки */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Тем пройдено", value: `${totalDone}/${TESTS.length}`, icon: "BookOpen", color: "text-indigo-600", bg: "bg-indigo-50" },
+          { label: "Все попытки", value: String(records.length), icon: "RefreshCcw", color: "text-violet-600", bg: "bg-violet-50" },
+          { label: "Точность", value: overallAcc !== null ? `${overallAcc}%` : "—", icon: "Target", color: "text-emerald-600", bg: "bg-emerald-50" },
+        ].map((s, i) => (
+          <div key={i} className="bg-white border border-border rounded-2xl p-3 text-center">
+            <div className={`w-7 h-7 ${s.bg} rounded-lg flex items-center justify-center mx-auto mb-1.5`}>
+              <Icon name={s.icon} size={13} className={s.color} />
             </div>
-            <div className="flex-1">
-              <div className="font-semibold">{t.title}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{t.subtitle}</div>
-              <div className="text-xs text-muted-foreground">{t.questions.length} вопросов · {t.time}с на вопрос</div>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${t.badgeBg} ${t.badgeText}`}>{t.difficulty}</span>
-              <Icon name="ChevronRight" size={16} className="text-muted-foreground" />
-            </div>
-          </button>
+            <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{s.label}</div>
+          </div>
         ))}
       </div>
+
+      {/* Фильтр по сложности */}
+      <div className="flex gap-2 overflow-x-auto pb-0.5">
+        {(["all", "Лёгкий", "Средний", "Сложный"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`flex-shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              filter === f
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-white border border-border text-muted-foreground"
+            }`}
+          >
+            {f === "all" ? "Все" : f}
+          </button>
+        ))}
+        <div className="ml-auto flex-shrink-0">
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="text-xs border border-border rounded-xl px-2.5 py-1.5 bg-white text-muted-foreground focus:outline-none"
+          >
+            <option value="default">По сложности</option>
+            <option value="best">По результату</option>
+            <option value="attempts">По попыткам</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Список тестов */}
+      <div className="space-y-3">
+        {sorted.map((t, i) => {
+          const stats = getTestStats(t.id);
+          const bestColor = stats
+            ? stats.best >= 80 ? "text-emerald-600" : stats.best >= 50 ? "text-amber-600" : "text-rose-500"
+            : "";
+          return (
+            <button
+              key={t.id}
+              onClick={() => startTest(t)}
+              className={`w-full bg-white border border-border rounded-2xl p-4 flex items-center gap-3 card-hover text-left animate-slide-up`}
+              style={{ animationDelay: `${i * 0.06}s` }}
+            >
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center shadow-sm flex-shrink-0`}>
+                <Icon name={t.icon} size={20} className="text-white" />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm">{t.title}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg ${DIFF_COLORS[t.difficulty]}`}>{t.difficulty}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{t.subtitle}</div>
+                <div className="text-xs text-muted-foreground">{t.questions.length} вопр. · {t.time}с на вопрос</div>
+                {stats && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-muted-foreground">{stats.attempts} попыток</span>
+                      <span className={`font-bold ${bestColor}`}>лучший {stats.best}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full bg-gradient-to-r ${t.gradient}`}
+                        style={{ width: `${stats.best}%`, transition: "width 0.8s ease" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+                {stats ? (
+                  <div className={`text-lg font-bold ${bestColor}`}>{stats.best}%</div>
+                ) : (
+                  <div className="w-9 h-9 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                    <Icon name="Play" size={14} className="text-muted-foreground" />
+                  </div>
+                )}
+                <Icon name="ChevronRight" size={14} className="text-muted-foreground" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {sorted.length === 0 && (
+        <div className="text-center py-10 text-muted-foreground text-sm">
+          Нет тестов по выбранному фильтру
+        </div>
+      )}
     </div>
   );
 }
@@ -1500,7 +1621,7 @@ export default function App() {
     }
     switch (page) {
       case "home": return <HomePage setPage={setPage} startTest={startTest} startLevel={startLevel} records={records} />;
-      case "tests": return <TestsPage startTest={startTest} />;
+      case "tests": return <TestsPage startTest={startTest} records={records} />;
       case "stats": return <StatsPage records={records} />;
       case "levels": return <LevelsPage records={records} onStartLevel={startLevel} />;
       case "profile": return <ProfilePage records={records} />;

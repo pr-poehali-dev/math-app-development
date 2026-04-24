@@ -485,20 +485,97 @@ function TestsPage({ startTest }: { startTest: (t: TestDef) => void }) {
 }
 
 // ─── Статистика ──────────────────────────────────────────────────
-function StatsPage() {
-  const maxVal = Math.max(...WEEK.map(d => d.max || 1));
+const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const TOPIC_GRADIENTS: Record<string, string> = {
+  "Основы счёта":   "from-blue-400 to-indigo-500",
+  "Умножение":      "from-emerald-400 to-teal-500",
+  "Деление":        "from-amber-400 to-orange-500",
+  "Дроби":          "from-rose-400 to-pink-500",
+  "Проценты":       "from-violet-400 to-purple-500",
+  "Уравнения":      "from-cyan-400 to-blue-500",
+  "Степени":        "from-fuchsia-400 to-pink-500",
+  "Геометрия":      "from-teal-400 to-emerald-500",
+  "Сложение до 100":"from-blue-400 to-indigo-500",
+  "Таблица умножения":"from-emerald-400 to-teal-500",
+  "Вычитание":      "from-amber-400 to-orange-500",
+  "Скорость счёта": "from-rose-400 to-pink-500",
+};
+
+function getStreak(records: TestRecord[]): number {
+  if (!records.length) return 0;
+  const days = new Set(
+    records.map((r) => {
+      const parts = r.date.split(" ");
+      return parts.join("-");
+    })
+  );
+  const today = new Date();
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const label = d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    if (days.has(label)) streak++;
+    else if (i > 0) break;
+  }
+  return streak;
+}
+
+function getWeekActivity(records: TestRecord[]): { day: string; count: number; accuracy: number }[] {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (6 - i));
+    const label = d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    const dayRecords = records.filter((r) => r.date === label);
+    const count = dayRecords.length;
+    const accuracy = count
+      ? Math.round((dayRecords.reduce((s, r) => s + r.correct, 0) / dayRecords.reduce((s, r) => s + r.total, 0)) * 100)
+      : 0;
+    return { day: WEEKDAYS[d.getDay()], count, accuracy };
+  });
+}
+
+function getTopicStats(records: TestRecord[]): { title: string; attempts: number; best: number; gradient: string }[] {
+  const map: Record<string, { correct: number[]; total: number[] }> = {};
+  for (const r of records) {
+    if (!map[r.testTitle]) map[r.testTitle] = { correct: [], total: [] };
+    map[r.testTitle].correct.push(r.correct);
+    map[r.testTitle].total.push(r.total);
+  }
+  return Object.entries(map).map(([title, data]) => ({
+    title,
+    attempts: data.correct.length,
+    best: Math.round((Math.max(...data.correct.map((c, i) => c / data.total[i]))) * 100),
+    gradient: TOPIC_GRADIENTS[title] ?? "from-indigo-400 to-violet-500",
+  })).sort((a, b) => b.best - a.best);
+}
+
+function StatsPage({ records }: { records: TestRecord[] }) {
+  const totalAnswers = records.reduce((s, r) => s + r.total, 0);
+  const totalCorrect = records.reduce((s, r) => s + r.correct, 0);
+  const accuracy = totalAnswers ? Math.round((totalCorrect / totalAnswers) * 100) : 0;
+  const streak = getStreak(records);
+  const week = getWeekActivity(records);
+  const topicStats = getTopicStats(records);
+  const maxCount = Math.max(...week.map((d) => d.count), 1);
+
+  const hasData = records.length > 0;
+
   return (
     <div className="animate-fade-in space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Статистика</h1>
-        <p className="text-muted-foreground text-sm mt-1">Твой прогресс за неделю</p>
+        <p className="text-muted-foreground text-sm mt-1">Твой реальный прогресс</p>
       </div>
+
+      {/* Карточки */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { l: "Решено задач", v: "247", icon: "Hash", c: "text-indigo-500", bg: "bg-indigo-50" },
-          { l: "Точность", v: "87%", icon: "Target", c: "text-emerald-500", bg: "bg-emerald-50" },
-          { l: "Серия дней", v: "7 🔥", icon: "Flame", c: "text-amber-500", bg: "bg-amber-50" },
-          { l: "Тестов пройдено", v: "34", icon: "CheckCircle", c: "text-rose-500", bg: "bg-rose-50" },
+          { l: "Решено задач", v: hasData ? String(totalCorrect) : "—", icon: "Hash", c: "text-indigo-500", bg: "bg-indigo-50" },
+          { l: "Точность", v: hasData ? `${accuracy}%` : "—", icon: "Target", c: "text-emerald-500", bg: "bg-emerald-50" },
+          { l: "Серия дней", v: streak > 0 ? `${streak} 🔥` : "—", icon: "Flame", c: "text-amber-500", bg: "bg-amber-50" },
+          { l: "Тестов пройдено", v: hasData ? String(records.length) : "—", icon: "CheckCircle", c: "text-rose-500", bg: "bg-rose-50" },
         ].map((s, i) => (
           <div key={i} className="bg-white border border-border rounded-2xl p-4 card-hover animate-pop" style={{ animationDelay: `${i * 0.07}s` }}>
             <div className={`w-9 h-9 ${s.bg} rounded-xl flex items-center justify-center mb-3`}>
@@ -509,45 +586,108 @@ function StatsPage() {
           </div>
         ))}
       </div>
+
+      {/* Активность за неделю */}
       <div className="bg-white border border-border rounded-2xl p-5">
-        <h3 className="font-semibold mb-4">Активность за неделю</h3>
-        <div className="flex items-end justify-between gap-2 h-24">
-          {WEEK.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex flex-col items-center justify-end h-16">
-                {d.max > 0 ? (
-                  <div className="w-full rounded-lg bg-indigo-100 relative overflow-hidden" style={{ height: `${(d.max / maxVal) * 64}px` }}>
-                    <div className="absolute bottom-0 left-0 right-0 rounded-lg bg-gradient-to-t from-indigo-600 to-indigo-400" style={{ height: `${(d.val / d.max) * 100}%` }} />
-                  </div>
-                ) : (
-                  <div className="w-full rounded-lg bg-muted h-2" />
+        <h3 className="font-semibold mb-4">Активность за 7 дней</h3>
+        {hasData ? (
+          <div className="flex items-end gap-1.5 h-28">
+            {week.map((d, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                {d.count > 0 && (
+                  <span className="text-[9px] font-semibold text-indigo-600">{d.count}</span>
                 )}
+                <div className="w-full flex flex-col justify-end" style={{ height: 72 }}>
+                  {d.count > 0 ? (
+                    <div
+                      className="w-full rounded-lg bg-gradient-to-t from-indigo-600 to-indigo-400"
+                      style={{ height: `${Math.max((d.count / maxCount) * 72, 8)}px`, transition: "height 0.8s ease" }}
+                    />
+                  ) : (
+                    <div className="w-full rounded-lg bg-muted" style={{ height: 4 }} />
+                  )}
+                </div>
+                <span className="text-[10px] text-muted-foreground">{d.day}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground">{d.day}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            Пройди первый тест — здесь появится график 📊
+          </div>
+        )}
       </div>
+
+      {/* Кольцо точности */}
+      {hasData && (
+        <div className="bg-white border border-border rounded-2xl p-5">
+          <h3 className="font-semibold mb-4">Общая точность</h3>
+          <div className="flex items-center gap-6">
+            <div className="relative w-24 h-24 flex-shrink-0">
+              <svg viewBox="0 0 36 36" className="w-24 h-24 -rotate-90">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
+                <circle
+                  cx="18" cy="18" r="15.9" fill="none"
+                  stroke="url(#grad)" strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={`${accuracy} ${100 - accuracy}`}
+                  strokeDashoffset="0"
+                />
+                <defs>
+                  <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold">{accuracy}%</span>
+              </div>
+            </div>
+            <div className="flex-1 space-y-2.5">
+              {[
+                { label: "Правильно", value: totalCorrect, color: "bg-emerald-500" },
+                { label: "Ошибок", value: totalAnswers - totalCorrect, color: "bg-rose-400" },
+                { label: "Всего", value: totalAnswers, color: "bg-indigo-500" },
+              ].map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                  <span className="text-xs text-muted-foreground flex-1">{s.label}</span>
+                  <span className="text-xs font-semibold">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* По темам */}
       <div className="bg-white border border-border rounded-2xl p-5">
         <h3 className="font-semibold mb-4">По темам</h3>
-        <div className="space-y-4">
-          {[
-            { topic: "Сложение", pct: 94, g: "from-blue-400 to-indigo-500" },
-            { topic: "Умножение", pct: 75, g: "from-emerald-400 to-teal-500" },
-            { topic: "Вычитание", pct: 60, g: "from-amber-400 to-orange-500" },
-            { topic: "Скорость счёта", pct: 40, g: "from-rose-400 to-pink-500" },
-          ].map((item, i) => (
-            <div key={i}>
-              <div className="flex justify-between text-sm mb-1.5">
-                <span className="font-medium">{item.topic}</span>
-                <span className="text-muted-foreground">{item.pct}%</span>
+        {topicStats.length > 0 ? (
+          <div className="space-y-4">
+            {topicStats.map((item, i) => (
+              <div key={i}>
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="font-medium truncate flex-1 mr-2">{item.title}</span>
+                  <span className="text-muted-foreground text-xs flex-shrink-0">
+                    {item.attempts} попыток · {item.best}%
+                  </span>
+                </div>
+                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${item.gradient}`}
+                    style={{ width: `${item.best}%`, transition: "width 1s ease" }}
+                  />
+                </div>
               </div>
-              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full rounded-full bg-gradient-to-r ${item.g}`} style={{ width: `${item.pct}%`, transition: "width 1s ease" }} />
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            Здесь будет твой прогресс по каждой теме 🎯
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1217,7 +1357,7 @@ export default function App() {
     switch (page) {
       case "home": return <HomePage setPage={setPage} startTest={startTest} />;
       case "tests": return <TestsPage startTest={startTest} />;
-      case "stats": return <StatsPage />;
+      case "stats": return <StatsPage records={records} />;
       case "levels": return <LevelsPage records={records} onStartLevel={startLevel} />;
       case "profile": return <ProfilePage records={records} />;
     }

@@ -68,7 +68,7 @@ function calcAccuracy(records: TestRecord[]) {
   return t ? Math.round((c / t) * 100) : 0;
 }
 
-type Page = "home" | "tests" | "quiz" | "stats" | "levels" | "profile";
+type Page = "home" | "tests" | "quiz" | "stats" | "levels" | "profile" | "level-quiz";
 
 // ─── данные тестов ───────────────────────────────────────────────
 interface Question {
@@ -553,52 +553,385 @@ function StatsPage() {
   );
 }
 
-// ─── Уровни ──────────────────────────────────────────────────────
-const LEVELS = [
-  { id: 1, title: "Основы счёта", desc: "Сложение и вычитание", color: "from-blue-400 to-indigo-500", progress: 100, unlocked: true },
-  { id: 2, title: "Умножение", desc: "Таблица умножения", color: "from-emerald-400 to-teal-500", progress: 75, unlocked: true },
-  { id: 3, title: "Дроби", desc: "Простые и десятичные", color: "from-amber-400 to-orange-500", progress: 30, unlocked: true },
-  { id: 4, title: "Уравнения", desc: "Линейные уравнения", color: "from-rose-400 to-pink-500", progress: 0, unlocked: false },
-  { id: 5, title: "Геометрия", desc: "Фигуры и площади", color: "from-violet-400 to-purple-500", progress: 0, unlocked: false },
+// ─── Уровни: данные ──────────────────────────────────────────────
+interface LevelDef {
+  id: number;
+  title: string;
+  desc: string;
+  topic: string;
+  color: string;
+  icon: string;
+  questions: Question[];
+}
+
+const LEVELS: LevelDef[] = [
+  {
+    id: 1, title: "Основы счёта", desc: "Сложение и вычитание до 100", topic: "Арифметика",
+    color: "from-blue-400 to-indigo-500", icon: "Calculator",
+    questions: [
+      { text: "23 + 14 = ?", options: ["35", "37", "36", "38"], correct: 1 },
+      { text: "50 − 18 = ?", options: ["31", "32", "33", "34"], correct: 1 },
+      { text: "47 + 36 = ?", options: ["81", "83", "82", "84"], correct: 1 },
+      { text: "91 − 44 = ?", options: ["45", "46", "47", "48"], correct: 2 },
+      { text: "62 + 29 = ?", options: ["89", "91", "90", "92"], correct: 1 },
+      { text: "75 − 37 = ?", options: ["36", "38", "37", "39"], correct: 1 },
+      { text: "18 + 45 = ?", options: ["61", "63", "62", "64"], correct: 1 },
+      { text: "84 − 56 = ?", options: ["26", "28", "27", "29"], correct: 1 },
+    ],
+  },
+  {
+    id: 2, title: "Умножение", desc: "Таблица умножения", topic: "Арифметика",
+    color: "from-emerald-400 to-teal-500", icon: "X",
+    questions: [
+      { text: "6 × 7 = ?", options: ["40", "42", "44", "38"], correct: 1 },
+      { text: "8 × 9 = ?", options: ["63", "72", "71", "74"], correct: 1 },
+      { text: "7 × 7 = ?", options: ["47", "48", "49", "50"], correct: 2 },
+      { text: "9 × 4 = ?", options: ["32", "36", "34", "38"], correct: 1 },
+      { text: "6 × 8 = ?", options: ["46", "48", "50", "44"], correct: 1 },
+      { text: "12 × 5 = ?", options: ["55", "60", "65", "50"], correct: 1 },
+      { text: "7 × 9 = ?", options: ["61", "63", "65", "67"], correct: 1 },
+      { text: "11 × 8 = ?", options: ["80", "88", "84", "86"], correct: 1 },
+    ],
+  },
+  {
+    id: 3, title: "Деление", desc: "Основы деления", topic: "Арифметика",
+    color: "from-amber-400 to-orange-500", icon: "Divide",
+    questions: [
+      { text: "56 ÷ 8 = ?", options: ["6", "7", "8", "9"], correct: 1 },
+      { text: "81 ÷ 9 = ?", options: ["7", "8", "9", "10"], correct: 2 },
+      { text: "48 ÷ 6 = ?", options: ["6", "7", "8", "9"], correct: 2 },
+      { text: "72 ÷ 8 = ?", options: ["8", "9", "10", "7"], correct: 1 },
+      { text: "63 ÷ 7 = ?", options: ["7", "8", "9", "10"], correct: 2 },
+      { text: "36 ÷ 4 = ?", options: ["7", "8", "9", "10"], correct: 2 },
+      { text: "100 ÷ 5 = ?", options: ["18", "20", "22", "25"], correct: 1 },
+      { text: "144 ÷ 12 = ?", options: ["10", "11", "12", "13"], correct: 2 },
+    ],
+  },
+  {
+    id: 4, title: "Дроби", desc: "Простые дроби", topic: "Дроби",
+    color: "from-rose-400 to-pink-500", icon: "Percent",
+    questions: [
+      { text: "1/2 + 1/4 = ?", options: ["2/6", "3/4", "1/2", "5/8"], correct: 1 },
+      { text: "3/4 − 1/4 = ?", options: ["2/4", "1/2", "2/8", "1/4"], correct: 0 },
+      { text: "2/3 × 3 = ?", options: ["1", "2", "3", "6/3"], correct: 1 },
+      { text: "Что больше: 3/5 или 1/2?", options: ["1/2", "3/5", "Равны", "Нельзя сравнить"], correct: 1 },
+      { text: "1/3 + 1/6 = ?", options: ["2/9", "1/2", "1/3", "3/6"], correct: 1 },
+      { text: "5/6 − 1/3 = ?", options: ["4/6", "1/2", "2/3", "1/6"], correct: 1 },
+      { text: "3/4 от 40 = ?", options: ["20", "25", "30", "35"], correct: 2 },
+      { text: "1/5 от 100 = ?", options: ["15", "20", "25", "10"], correct: 1 },
+    ],
+  },
+  {
+    id: 5, title: "Проценты", desc: "Вычисление процентов", topic: "Проценты",
+    color: "from-violet-400 to-purple-500", icon: "TrendingUp",
+    questions: [
+      { text: "10% от 200 = ?", options: ["10", "20", "30", "40"], correct: 1 },
+      { text: "25% от 80 = ?", options: ["15", "20", "25", "10"], correct: 1 },
+      { text: "50% от 150 = ?", options: ["65", "75", "85", "55"], correct: 1 },
+      { text: "15% от 60 = ?", options: ["6", "9", "12", "15"], correct: 1 },
+      { text: "30% от 90 = ?", options: ["25", "27", "29", "23"], correct: 1 },
+      { text: "5% от 400 = ?", options: ["15", "20", "25", "10"], correct: 1 },
+      { text: "40% от 50 = ?", options: ["18", "20", "22", "25"], correct: 1 },
+      { text: "75% от 120 = ?", options: ["80", "90", "85", "95"], correct: 1 },
+    ],
+  },
+  {
+    id: 6, title: "Уравнения", desc: "Линейные уравнения", topic: "Алгебра",
+    color: "from-cyan-400 to-blue-500", icon: "Equal",
+    questions: [
+      { text: "x + 7 = 15, x = ?", options: ["6", "7", "8", "9"], correct: 2 },
+      { text: "2x = 18, x = ?", options: ["7", "8", "9", "10"], correct: 2 },
+      { text: "3x − 4 = 11, x = ?", options: ["4", "5", "6", "7"], correct: 1 },
+      { text: "x/3 = 7, x = ?", options: ["18", "21", "24", "27"], correct: 1 },
+      { text: "5x + 2 = 27, x = ?", options: ["4", "5", "6", "7"], correct: 1 },
+      { text: "4x − 8 = 12, x = ?", options: ["4", "5", "6", "7"], correct: 1 },
+      { text: "x/5 + 3 = 7, x = ?", options: ["15", "20", "25", "10"], correct: 1 },
+      { text: "2x + 3x = 25, x = ?", options: ["4", "5", "6", "7"], correct: 1 },
+    ],
+  },
+  {
+    id: 7, title: "Степени", desc: "Возведение в степень и корни", topic: "Алгебра",
+    color: "from-fuchsia-400 to-pink-500", icon: "Zap",
+    questions: [
+      { text: "2⁴ = ?", options: ["8", "12", "16", "20"], correct: 2 },
+      { text: "3³ = ?", options: ["9", "18", "27", "36"], correct: 2 },
+      { text: "√81 = ?", options: ["7", "8", "9", "10"], correct: 2 },
+      { text: "5² + 4² = ?", options: ["38", "41", "43", "45"], correct: 1 },
+      { text: "√144 = ?", options: ["10", "11", "12", "13"], correct: 2 },
+      { text: "2⁵ = ?", options: ["16", "32", "64", "24"], correct: 1 },
+      { text: "10³ = ?", options: ["300", "1000", "10000", "100"], correct: 1 },
+      { text: "√49 + √25 = ?", options: ["10", "11", "12", "13"], correct: 2 },
+    ],
+  },
+  {
+    id: 8, title: "Геометрия", desc: "Площади и периметры", topic: "Геометрия",
+    color: "from-teal-400 to-emerald-500", icon: "Square",
+    questions: [
+      { text: "Площадь прямоугольника 8×5 = ?", options: ["35", "40", "45", "30"], correct: 1 },
+      { text: "Периметр квадрата со стороной 6 = ?", options: ["20", "24", "28", "18"], correct: 1 },
+      { text: "Площадь треугольника: основание 10, высота 4 = ?", options: ["20", "40", "25", "30"], correct: 0 },
+      { text: "Площадь круга с r=7, π≈3.14 ≈ ?", options: ["143", "154", "165", "132"], correct: 1 },
+      { text: "Гипотенуза при катетах 3 и 4 = ?", options: ["5", "6", "7", "8"], correct: 0 },
+      { text: "Объём куба со стороной 3 = ?", options: ["9", "18", "27", "36"], correct: 2 },
+      { text: "Диагональ квадрата со стороной 4 ≈ ?", options: ["4.5", "5.7", "6.0", "4.9"], correct: 1 },
+      { text: "Периметр треугольника со сторонами 5, 7, 9 = ?", options: ["19", "21", "23", "25"], correct: 1 },
+    ],
+  },
 ];
 
-function LevelsPage() {
+// Считаем прогресс уровня по истории результатов
+function getLevelProgress(levelId: number, records: TestRecord[]): number {
+  const key = `level_${levelId}`;
+  const levelRecords = records.filter((r) => r.testId === -levelId);
+  if (!levelRecords.length) return 0;
+  const best = Math.max(...levelRecords.map((r) => Math.round((r.correct / r.total) * 100)));
+  return best;
+}
+
+function isLevelUnlocked(levelId: number, records: TestRecord[]): boolean {
+  if (levelId === 1) return true;
+  return getLevelProgress(levelId - 1, records) >= 70;
+}
+
+// ─── LevelQuiz ────────────────────────────────────────────────────
+function LevelQuiz({
+  level,
+  onFinish,
+  onBack,
+}: {
+  level: LevelDef;
+  onFinish: (correct: number, total: number) => void;
+  onBack: () => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [correct, setCorrect] = useState(0);
+  const [done, setDone] = useState(false);
+  const q = level.questions[idx];
+  const total = level.questions.length;
+
+  const next = useCallback(
+    (choice: number | null) => {
+      const isOk = choice === q.correct;
+      const newCorrect = correct + (isOk ? 1 : 0);
+      if (idx + 1 >= total) {
+        setDone(true);
+        onFinish(newCorrect, total);
+      } else {
+        setCorrect(newCorrect);
+        setIdx(idx + 1);
+        setSelected(null);
+      }
+    },
+    [idx, q, correct, total, onFinish]
+  );
+
+  const choose = (i: number) => {
+    if (selected !== null) return;
+    setSelected(i);
+    setTimeout(() => next(i), 700);
+  };
+
+  if (done) {
+    const pct = Math.round((correct / total) * 100);
+    const passed = pct >= 70;
+    return (
+      <div className="animate-pop flex flex-col items-center text-center gap-5 pt-8">
+        <div className="text-7xl">{passed ? "🏆" : "📚"}</div>
+        <div>
+          <h2 className="text-2xl font-bold">{passed ? "Уровень пройден!" : "Попробуй ещё раз"}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{level.title}</p>
+        </div>
+        <div className={`w-32 h-32 rounded-full bg-gradient-to-br ${level.color} flex flex-col items-center justify-center text-white shadow-lg`}>
+          <span className="text-4xl font-bold">{pct}%</span>
+          <span className="text-sm opacity-80">{correct}/{total}</span>
+        </div>
+        {passed && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 text-emerald-700 text-sm font-medium w-full">
+            🎉 Следующий уровень открыт!
+          </div>
+        )}
+        {!passed && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 text-amber-700 text-sm font-medium w-full">
+            Нужно 70%+ чтобы открыть следующий уровень
+          </div>
+        )}
+        <div className="w-full flex gap-3">
+          <button onClick={onBack} className="flex-1 py-3 rounded-2xl border border-border font-semibold text-sm">К уровням</button>
+          <button
+            onClick={() => { setIdx(0); setSelected(null); setCorrect(0); setDone(false); }}
+            className={`flex-1 py-3 rounded-2xl bg-gradient-to-r ${level.color} text-white font-semibold text-sm`}
+          >
+            Повторить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-slide-up space-y-5">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="w-9 h-9 rounded-xl border border-border flex items-center justify-center">
+          <Icon name="ChevronLeft" size={18} className="text-muted-foreground" />
+        </button>
+        <div className="flex-1">
+          <p className="text-xs text-muted-foreground font-medium">{level.title}</p>
+          <div className="flex gap-1 mt-1">
+            {level.questions.map((_, i) => (
+              <div key={i} className={`h-1.5 flex-1 rounded-full ${i < idx ? `bg-gradient-to-r ${level.color}` : i === idx ? "bg-indigo-300" : "bg-muted"}`} />
+            ))}
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-muted-foreground">{idx + 1}/{total}</span>
+      </div>
+
+      <div className={`bg-gradient-to-br ${level.color} rounded-3xl p-6 text-center`}>
+        <p className="text-white/70 text-xs mb-3 font-medium">Вопрос {idx + 1}</p>
+        <div className="font-cormorant text-5xl font-bold text-white leading-tight">{q.text}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {q.options.map((opt, i) => {
+          let cls = "bg-white border-2 border-border text-foreground";
+          if (selected !== null) {
+            if (i === q.correct) cls = "bg-emerald-50 border-emerald-400 text-emerald-700";
+            else if (i === selected) cls = "bg-rose-50 border-rose-400 text-rose-700";
+            else cls = "bg-white border-border text-muted-foreground opacity-50";
+          }
+          return (
+            <button
+              key={i}
+              onClick={() => choose(i)}
+              disabled={selected !== null}
+              className={`${cls} rounded-2xl py-4 font-bold text-2xl transition-all active:scale-95 font-cormorant`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+
+      {selected !== null && (
+        <div className={`animate-pop rounded-2xl px-4 py-3 flex items-center gap-2 ${selected === q.correct ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+          <span className="text-xl">{selected === q.correct ? "✅" : "❌"}</span>
+          <span className={`font-semibold text-sm ${selected === q.correct ? "text-emerald-700" : "text-rose-700"}`}>
+            {selected === q.correct ? "Правильно!" : `Ответ: ${q.options[q.correct]}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LevelsPage ───────────────────────────────────────────────────
+function LevelsPage({
+  records,
+  onStartLevel,
+}: {
+  records: TestRecord[];
+  onStartLevel: (level: LevelDef) => void;
+}) {
   return (
     <div className="animate-fade-in space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Уровни</h1>
-        <p className="text-muted-foreground text-sm mt-1">Путь к математическому мастерству</p>
+        <p className="text-muted-foreground text-sm mt-1">Пройди 70%+ чтобы открыть следующий</p>
       </div>
+
+      {/* Общий прогресс */}
+      <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-4 text-white">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-semibold">Общий прогресс</span>
+          <span className="text-sm opacity-80">
+            {LEVELS.filter((lv) => getLevelProgress(lv.id, records) >= 70).length} / {LEVELS.length} пройдено
+          </span>
+        </div>
+        <div className="h-2.5 bg-white/30 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-white rounded-full"
+            style={{
+              width: `${(LEVELS.filter((lv) => getLevelProgress(lv.id, records) >= 70).length / LEVELS.length) * 100}%`,
+              transition: "width 1s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Список уровней */}
       <div className="relative">
-        <div className="absolute left-6 top-8 bottom-8 w-px bg-border z-0" />
-        <div className="space-y-4 relative z-10">
-          {LEVELS.map((lv, i) => (
-            <div key={lv.id} className="flex gap-4 animate-slide-up" style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${lv.color} flex items-center justify-center text-white font-bold flex-shrink-0 ${!lv.unlocked ? "opacity-30 grayscale" : ""} shadow-sm`}>
-                {lv.unlocked ? lv.id : <Icon name="Lock" size={18} />}
-              </div>
-              <div className={`flex-1 bg-white border border-border rounded-2xl p-4 ${lv.unlocked ? "card-hover" : "opacity-50"}`}>
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-semibold">{lv.title}</h3>
-                    <p className="text-xs text-muted-foreground">{lv.desc}</p>
-                  </div>
-                  {lv.progress === 100 && <span className="text-emerald-500 text-xs font-semibold">✓ Готово</span>}
+        <div className="absolute left-[22px] top-6 bottom-6 w-0.5 bg-border z-0" />
+        <div className="space-y-3 relative z-10">
+          {LEVELS.map((lv, i) => {
+            const unlocked = isLevelUnlocked(lv.id, records);
+            const progress = getLevelProgress(lv.id, records);
+            const passed = progress >= 70;
+
+            return (
+              <div key={lv.id} className="flex gap-3 animate-slide-up" style={{ animationDelay: `${i * 0.07}s` }}>
+                {/* Иконка */}
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm font-bold text-white
+                    ${unlocked ? `bg-gradient-to-br ${lv.color}` : "bg-muted"}
+                    ${passed ? "ring-2 ring-offset-1 ring-emerald-400" : ""}
+                  `}
+                >
+                  {passed ? (
+                    <Icon name="CheckCircle" size={18} className="text-white" />
+                  ) : unlocked ? (
+                    <Icon name={lv.icon} size={18} className="text-white" />
+                  ) : (
+                    <Icon name="Lock" size={16} className="text-muted-foreground" />
+                  )}
                 </div>
-                {lv.unlocked && lv.progress > 0 && (
-                  <>
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1"><span>Прогресс</span><span>{lv.progress}%</span></div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full bg-gradient-to-r ${lv.color}`} style={{ width: `${lv.progress}%` }} />
+
+                {/* Карточка */}
+                <div className={`flex-1 bg-white border rounded-2xl p-4 transition-all ${unlocked ? "border-border card-hover" : "border-border opacity-50"}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm">{lv.title}</h3>
+                        {passed && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md">✓</span>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{lv.desc}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{lv.questions.length} вопросов</p>
                     </div>
-                  </>
-                )}
-                {lv.unlocked && lv.progress === 0 && (
-                  <button className={`mt-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gradient-to-r ${lv.color} text-white`}>Начать</button>
-                )}
+                    {unlocked && (
+                      <button
+                        onClick={() => onStartLevel(lv)}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl bg-gradient-to-r ${lv.color} text-white flex-shrink-0 active:scale-95 transition-transform`}
+                      >
+                        {passed ? "Повторить" : progress > 0 ? "Продолжить" : "Начать"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Прогресс-бар */}
+                  {unlocked && progress > 0 && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                        <span>Лучший результат</span>
+                        <span className={progress >= 70 ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>{progress}%</span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${lv.color}`}
+                          style={{ width: `${progress}%`, transition: "width 0.8s ease" }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Что нужно для разблокировки */}
+                  {!unlocked && (
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      🔒 Пройди «{LEVELS[i - 1]?.title}» на 70%+
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -819,6 +1152,7 @@ const NAV: { id: Page; label: string; icon: string }[] = [
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [activeTest, setActiveTest] = useState<TestDef | null>(null);
+  const [activeLevel, setActiveLevel] = useState<LevelDef | null>(null);
   const [records, setRecords] = useState<TestRecord[]>(loadRecords);
 
   const startTest = (t: TestDef) => {
@@ -842,25 +1176,54 @@ export default function App() {
     });
   };
 
+  const startLevel = (lv: LevelDef) => {
+    setActiveLevel(lv);
+    setPage("level-quiz");
+  };
+
+  const finishLevel = (correct: number, total: number) => {
+    if (!activeLevel) return;
+    const rec: TestRecord = {
+      testId: -activeLevel.id,
+      testTitle: activeLevel.title,
+      correct,
+      total,
+      date: new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
+    };
+    setRecords((prev) => {
+      const next = [rec, ...prev].slice(0, 100);
+      saveRecords(next);
+      return next;
+    });
+  };
+
   const backFromQuiz = () => {
     setActiveTest(null);
     setPage("tests");
+  };
+
+  const backFromLevel = () => {
+    setActiveLevel(null);
+    setPage("levels");
   };
 
   const renderPage = () => {
     if (page === "quiz" && activeTest) {
       return <QuizPage test={activeTest} onFinish={finishTest} onBack={backFromQuiz} />;
     }
+    if (page === "level-quiz" && activeLevel) {
+      return <LevelQuiz level={activeLevel} onFinish={finishLevel} onBack={backFromLevel} />;
+    }
     switch (page) {
       case "home": return <HomePage setPage={setPage} startTest={startTest} />;
       case "tests": return <TestsPage startTest={startTest} />;
       case "stats": return <StatsPage />;
-      case "levels": return <LevelsPage />;
+      case "levels": return <LevelsPage records={records} onStartLevel={startLevel} />;
       case "profile": return <ProfilePage records={records} />;
     }
   };
 
-  const showNav = page !== "quiz";
+  const showNav = page !== "quiz" && page !== "level-quiz";
 
   return (
     <div className="min-h-screen bg-background flex justify-center">

@@ -369,38 +369,90 @@ function QuizPage({
 }
 
 // ─── Главная ─────────────────────────────────────────────────────
-function HomePage({ setPage, startTest }: { setPage: (p: Page) => void; startTest: (t: TestDef) => void }) {
+function HomePage({
+  setPage,
+  startTest,
+  startLevel,
+  records,
+}: {
+  setPage: (p: Page) => void;
+  startTest: (t: TestDef) => void;
+  startLevel: (l: LevelDef) => void;
+  records: TestRecord[];
+}) {
+  const profile = loadProfile();
+  const xp = calcXP(records);
+  const { level, xpInLevel, title } = calcLevel(xp);
+  const accuracy = calcAccuracy(records);
+  const streak = getStreak(records);
+  const totalCorrect = records.reduce((s, r) => s + r.correct, 0);
+  const hasData = records.length > 0;
+
+  // Найти первый незавершённый уровень
+  const nextLevel = LEVELS.find((lv) => {
+    if (!isLevelUnlocked(lv.id, records)) return false;
+    return getLevelProgress(lv.id, records) < 70;
+  }) ?? LEVELS[0];
+
+  const nextLevelProgress = getLevelProgress(nextLevel.id, records);
+
+  // Достижения (аналогично ProfilePage)
+  const earnedAchievements = ACHIEVEMENTS.filter((a) =>
+    (a.id === 1 && records.length >= 1) ||
+    (a.id === 2 && records.some((r) => r.correct / r.total === 1)) ||
+    (a.id === 3 && records.length >= 10) ||
+    (a.id === 4 && records.length >= 50) ||
+    (a.id === 5 && records.some((r) => r.correct === r.total && r.total > 0)) ||
+    (a.id === 6 && totalCorrect >= 500)
+  );
+
+  const greetingHour = new Date().getHours();
+  const greeting =
+    greetingHour < 12 ? "Доброе утро" : greetingHour < 18 ? "Добрый день" : "Добрый вечер";
+
   return (
     <div className="animate-fade-in space-y-5">
+
+      {/* Hero-баннер */}
       <div className="bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600 rounded-3xl p-6 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-12 translate-x-12 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-8 -translate-x-8 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-44 h-44 bg-white/10 rounded-full -translate-y-14 translate-x-14 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-28 h-28 bg-white/10 rounded-full translate-y-10 -translate-x-10 pointer-events-none" />
         <div className="relative">
-          <p className="text-white/70 text-sm mb-0.5">Привет, Алекс! 👋</p>
-          <h1 className="text-2xl font-bold mb-4">Продолжаем учиться?</h1>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-white/70 text-sm">{greeting}, {profile.name}! 👋</p>
+            <div className="bg-white/20 rounded-xl px-2.5 py-1 text-xs font-semibold">
+              Ур. {level} · {title}
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold mb-4">
+            {hasData ? "Продолжаем учиться?" : "Начнём учиться?"}
+          </h1>
+
+          {/* XP прогресс */}
           <div className="bg-white/20 backdrop-blur rounded-2xl p-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-semibold">Таблица умножения</span>
-              <span className="text-sm text-white/80">75%</span>
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-sm font-semibold">{nextLevel.title}</span>
+              <span className="text-sm text-white/80">{nextLevelProgress}%</span>
             </div>
             <div className="h-2 bg-white/30 rounded-full overflow-hidden mb-3">
-              <div className="h-full progress-bar" style={{ width: "75%" }} />
+              <div className="h-full bg-white rounded-full transition-all duration-700" style={{ width: `${nextLevelProgress}%` }} />
             </div>
             <button
-              onClick={() => startTest(TESTS[1])}
-              className="w-full bg-white text-indigo-600 font-bold text-sm py-2.5 rounded-xl hover:bg-white/90 transition-colors"
+              onClick={() => startLevel(nextLevel)}
+              className="w-full bg-white text-indigo-600 font-bold text-sm py-2.5 rounded-xl active:scale-95 transition-all"
             >
-              Продолжить →
+              {nextLevelProgress > 0 ? "Продолжить →" : "Начать →"}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Мини-статистика */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { v: "247", l: "Задач", c: "text-indigo-600" },
-          { v: "87%", l: "Точность", c: "text-emerald-600" },
-          { v: "7🔥", l: "Дней", c: "text-amber-600" },
+          { v: hasData ? String(totalCorrect) : "0", l: "Задач", c: "text-indigo-600" },
+          { v: hasData ? `${accuracy}%` : "—", l: "Точность", c: "text-emerald-600" },
+          { v: streak > 0 ? `${streak}🔥` : "0", l: "Дней", c: "text-amber-600" },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-2xl p-3 text-center border border-border">
             <div className={`text-xl font-bold ${s.c}`}>{s.v}</div>
@@ -409,42 +461,134 @@ function HomePage({ setPage, startTest }: { setPage: (p: Page) => void; startTes
         ))}
       </div>
 
+      {/* XP-бар */}
+      <div className="bg-white border border-border rounded-2xl p-4">
+        <div className="flex justify-between text-xs mb-2">
+          <span className="text-muted-foreground font-medium">Опыт (XP)</span>
+          <span className="font-semibold text-indigo-600">{xpInLevel} / 100 до уровня {level + 1}</span>
+        </div>
+        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+          <div className="h-full progress-bar" style={{ width: `${xpInLevel}%` }} />
+        </div>
+      </div>
+
+      {/* Быстрые тесты */}
       <div>
         <div className="flex justify-between items-center mb-3">
           <h2 className="font-bold text-lg">Быстрые тесты</h2>
           <button onClick={() => setPage("tests")} className="text-sm text-indigo-500 font-medium">Все →</button>
         </div>
         <div className="space-y-2.5">
-          {TESTS.slice(0, 3).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => startTest(t)}
-              className={`w-full ${t.color} border rounded-2xl p-4 flex items-center gap-3 card-hover text-left`}
-            >
-              <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-                <Icon name={t.icon} size={18} className="text-indigo-500" />
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-sm">{t.title}</div>
-                <div className="text-xs text-muted-foreground">{t.questions.length} вопросов · {t.time}с/вопрос</div>
-              </div>
-              <span className={`text-xs font-medium px-2 py-1 rounded-lg ${t.badgeBg} ${t.badgeText}`}>{t.difficulty}</span>
-            </button>
-          ))}
+          {TESTS.slice(0, 3).map((t) => {
+            const testRecords = records.filter((r) => r.testId === t.id);
+            const best = testRecords.length
+              ? Math.max(...testRecords.map((r) => Math.round((r.correct / r.total) * 100)))
+              : null;
+            return (
+              <button
+                key={t.id}
+                onClick={() => startTest(t)}
+                className={`w-full ${t.color} border rounded-2xl p-4 flex items-center gap-3 card-hover text-left`}
+              >
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center shadow-sm flex-shrink-0`}>
+                  <Icon name={t.icon} size={18} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-sm">{t.title}</div>
+                  <div className="text-xs text-muted-foreground">{t.questions.length} вопр. · {t.time}с</div>
+                </div>
+                {best !== null ? (
+                  <span className={`text-xs font-bold px-2 py-1 rounded-lg ${best >= 80 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                    {best}%
+                  </span>
+                ) : (
+                  <span className={`text-xs font-medium px-2 py-1 rounded-lg ${t.badgeBg} ${t.badgeText}`}>{t.difficulty}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Уровни — продолжить */}
       <div>
-        <h2 className="font-bold text-lg mb-3">Достижения</h2>
-        <div className="flex gap-2.5 overflow-x-auto pb-1">
-          {ACHIEVEMENTS.filter(a => a.earned).map((a, i) => (
-            <div key={a.id} className="flex-shrink-0 bg-white border border-border rounded-2xl p-3 text-center w-20 card-hover animate-pop" style={{ animationDelay: `${i * 0.07}s` }}>
-              <div className="text-2xl mb-1">{a.icon}</div>
-              <div className="text-[11px] font-semibold leading-tight">{a.title}</div>
-            </div>
-          ))}
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="font-bold text-lg">Уровни</h2>
+          <button onClick={() => setPage("levels")} className="text-sm text-indigo-500 font-medium">Все →</button>
+        </div>
+        <div className="space-y-2">
+          {LEVELS.slice(0, 3).map((lv) => {
+            const unlocked = isLevelUnlocked(lv.id, records);
+            const prog = getLevelProgress(lv.id, records);
+            const passed = prog >= 70;
+            return (
+              <button
+                key={lv.id}
+                onClick={() => unlocked && startLevel(lv)}
+                disabled={!unlocked}
+                className={`w-full bg-white border border-border rounded-2xl p-3.5 flex items-center gap-3 text-left transition-all ${unlocked ? "card-hover active:scale-[0.98]" : "opacity-40"}`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${lv.color} flex items-center justify-center flex-shrink-0 ${!unlocked ? "grayscale" : ""}`}>
+                  {passed
+                    ? <Icon name="CheckCircle" size={16} className="text-white" />
+                    : unlocked
+                      ? <Icon name={lv.icon} size={16} className="text-white" />
+                      : <Icon name="Lock" size={14} className="text-white" />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-sm">{lv.title}</span>
+                    {passed && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">✓</span>}
+                  </div>
+                  {unlocked && prog > 0 && (
+                    <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full bg-gradient-to-r ${lv.color}`} style={{ width: `${prog}%` }} />
+                    </div>
+                  )}
+                  {!unlocked && <span className="text-[10px] text-muted-foreground">🔒 Заблокировано</span>}
+                </div>
+                {unlocked && (
+                  <Icon name="ChevronRight" size={16} className="text-muted-foreground flex-shrink-0" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {/* Достижения */}
+      {earnedAchievements.length > 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-bold text-lg">Достижения</h2>
+            <button onClick={() => setPage("profile")} className="text-sm text-indigo-500 font-medium">Все →</button>
+          </div>
+          <div className="flex gap-2.5 overflow-x-auto pb-1">
+            {earnedAchievements.map((a, i) => (
+              <div key={a.id} className="flex-shrink-0 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center w-20 card-hover animate-pop" style={{ animationDelay: `${i * 0.07}s` }}>
+                <div className="text-2xl mb-1">{a.icon}</div>
+                <div className="text-[11px] font-semibold leading-tight">{a.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Пустое состояние — первый запуск */}
+      {!hasData && (
+        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl p-5 text-center">
+          <div className="text-4xl mb-3">🚀</div>
+          <h3 className="font-bold mb-1">Добро пожаловать!</h3>
+          <p className="text-sm text-muted-foreground mb-4">Пройди первый уровень или быстрый тест — статистика появится здесь</p>
+          <button
+            onClick={() => startLevel(LEVELS[0])}
+            className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-bold text-sm px-6 py-2.5 rounded-xl"
+          >
+            Начать обучение →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1355,7 +1499,7 @@ export default function App() {
       return <LevelQuiz level={activeLevel} onFinish={finishLevel} onBack={backFromLevel} />;
     }
     switch (page) {
-      case "home": return <HomePage setPage={setPage} startTest={startTest} />;
+      case "home": return <HomePage setPage={setPage} startTest={startTest} startLevel={startLevel} records={records} />;
       case "tests": return <TestsPage startTest={startTest} />;
       case "stats": return <StatsPage records={records} />;
       case "levels": return <LevelsPage records={records} onStartLevel={startLevel} />;

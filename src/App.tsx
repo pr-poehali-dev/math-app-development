@@ -1,5 +1,72 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
+
+// ─── Профиль: хранилище ──────────────────────────────────────────
+interface UserProfile {
+  name: string;
+  avatarColor: string;
+  notifications: boolean;
+}
+
+interface TestRecord {
+  testId: number;
+  testTitle: string;
+  correct: number;
+  total: number;
+  date: string;
+}
+
+const AVATAR_COLORS = [
+  "from-indigo-400 to-violet-500",
+  "from-emerald-400 to-teal-500",
+  "from-rose-400 to-pink-500",
+  "from-amber-400 to-orange-500",
+  "from-blue-400 to-cyan-500",
+  "from-purple-400 to-fuchsia-500",
+];
+
+function loadProfile(): UserProfile {
+  try {
+    const s = localStorage.getItem("math_profile");
+    if (s) return JSON.parse(s);
+  } catch { /* ignore */ }
+  return { name: "Игрок", avatarColor: AVATAR_COLORS[0], notifications: true };
+}
+
+function saveProfile(p: UserProfile) {
+  localStorage.setItem("math_profile", JSON.stringify(p));
+}
+
+function loadRecords(): TestRecord[] {
+  try {
+    const s = localStorage.getItem("math_records");
+    if (s) return JSON.parse(s);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveRecords(r: TestRecord[]) {
+  localStorage.setItem("math_records", JSON.stringify(r));
+}
+
+function calcXP(records: TestRecord[]) {
+  return records.reduce((sum, r) => sum + r.correct * 10 + 5, 0);
+}
+
+function calcLevel(xp: number) {
+  const level = Math.floor(xp / 100) + 1;
+  const xpInLevel = xp % 100;
+  const titles = ["", "Новичок", "Ученик", "Знаток", "Мастер", "Эксперт", "Профессор"];
+  const title = titles[Math.min(level, titles.length - 1)] ?? "Легенда";
+  return { level, xpInLevel, title };
+}
+
+function calcAccuracy(records: TestRecord[]) {
+  if (!records.length) return 0;
+  const c = records.reduce((s, r) => s + r.correct, 0);
+  const t = records.reduce((s, r) => s + r.total, 0);
+  return t ? Math.round((c / t) * 100) : 0;
+}
 
 type Page = "home" | "tests" | "quiz" | "stats" | "levels" | "profile";
 
@@ -539,35 +606,147 @@ function LevelsPage() {
 }
 
 // ─── Профиль ─────────────────────────────────────────────────────
-function ProfilePage() {
+function ProfilePage({ records }: { records: TestRecord[] }) {
+  const [profile, setProfile] = useState<UserProfile>(loadProfile);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(profile.name);
+  const [pickingColor, setPickingColor] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  function saveName() {
+    const updated = { ...profile, name: draft.trim() || profile.name };
+    setProfile(updated);
+    saveProfile(updated);
+    setEditing(false);
+  }
+
+  function pickColor(c: string) {
+    const updated = { ...profile, avatarColor: c };
+    setProfile(updated);
+    saveProfile(updated);
+    setPickingColor(false);
+  }
+
+  function toggleNotifications() {
+    const updated = { ...profile, notifications: !profile.notifications };
+    setProfile(updated);
+    saveProfile(updated);
+  }
+
+  const xp = calcXP(records);
+  const { level, xpInLevel, title } = calcLevel(xp);
+  const accuracy = calcAccuracy(records);
+  const xpProgress = xpInLevel;
+  const initial = (profile.name[0] ?? "И").toUpperCase();
+
+  const earnedAchievements = ACHIEVEMENTS.map((a) => ({
+    ...a,
+    earned:
+      (a.id === 1 && records.length >= 1) ||
+      (a.id === 2 && records.some((r) => r.correct / r.total === 1)) ||
+      (a.id === 3 && records.length >= 10) ||
+      (a.id === 4 && records.length >= 50) ||
+      (a.id === 5 && records.some((r) => r.correct === r.total && r.total > 0)) ||
+      (a.id === 6 && records.reduce((s, r) => s + r.correct, 0) >= 500),
+  }));
+
   return (
     <div className="animate-fade-in space-y-5">
+      {/* Карточка профиля */}
       <div className="bg-white border border-border rounded-3xl p-6">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-sm">А</div>
-          <div className="flex-1">
-            <h2 className="font-bold text-xl">Алексей</h2>
-            <p className="text-muted-foreground text-sm">Уровень 3 · Ученик</p>
-          </div>
-          <button className="w-9 h-9 rounded-xl border border-border flex items-center justify-center">
-            <Icon name="Settings" size={16} className="text-muted-foreground" />
+        <div className="flex items-start gap-4">
+          {/* Аватар */}
+          <button
+            onClick={() => setPickingColor(!pickingColor)}
+            className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${profile.avatarColor} flex items-center justify-center text-white text-2xl font-bold shadow-sm relative flex-shrink-0 active:scale-95 transition-transform`}
+          >
+            {initial}
+            <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-border rounded-full flex items-center justify-center">
+              <Icon name="Palette" size={10} className="text-muted-foreground" />
+            </span>
           </button>
+
+          <div className="flex-1 min-w-0">
+            {editing ? (
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditing(false); }}
+                  maxLength={24}
+                  className="flex-1 font-bold text-xl border-b-2 border-primary outline-none bg-transparent"
+                />
+                <button onClick={saveName} className="text-primary">
+                  <Icon name="Check" size={18} />
+                </button>
+                <button onClick={() => setEditing(false)} className="text-muted-foreground">
+                  <Icon name="X" size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-xl truncate">{profile.name}</h2>
+                <button onClick={() => { setDraft(profile.name); setEditing(true); }} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <Icon name="Pencil" size={14} />
+                </button>
+              </div>
+            )}
+            <p className="text-muted-foreground text-sm mt-0.5">Уровень {level} · {title}</p>
+          </div>
         </div>
+
+        {/* Палитра цветов */}
+        {pickingColor && (
+          <div className="mt-4 flex gap-2 flex-wrap animate-pop">
+            {AVATAR_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => pickColor(c)}
+                className={`w-9 h-9 rounded-xl bg-gradient-to-br ${c} ${profile.avatarColor === c ? "ring-2 ring-offset-2 ring-primary" : ""} active:scale-90 transition-transform`}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* XP прогресс */}
         <div className="mt-4">
           <div className="flex justify-between text-xs mb-1.5">
-            <span className="text-muted-foreground">До уровня 4</span>
-            <span className="font-semibold">1240 / 2000 XP</span>
+            <span className="text-muted-foreground">До уровня {level + 1}</span>
+            <span className="font-semibold">{xpInLevel} / 100 XP</span>
           </div>
           <div className="h-3 bg-muted rounded-full overflow-hidden">
-            <div className="h-full progress-bar" style={{ width: "62%" }} />
+            <div className="h-full progress-bar" style={{ width: `${xpProgress}%` }} />
           </div>
         </div>
+
+        {/* Мини-статистика */}
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {[
+            { label: "Тестов", value: records.length, color: "text-indigo-600" },
+            { label: "Точность", value: `${accuracy}%`, color: "text-emerald-600" },
+            { label: "XP всего", value: xp, color: "text-amber-600" },
+          ].map((s, i) => (
+            <div key={i} className="bg-muted/60 rounded-xl p-2.5 text-center">
+              <div className={`font-bold text-lg ${s.color}`}>{s.value}</div>
+              <div className="text-[10px] text-muted-foreground">{s.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* Достижения */}
       <div>
         <h3 className="font-semibold mb-3">Достижения</h3>
         <div className="grid grid-cols-3 gap-2.5">
-          {ACHIEVEMENTS.map((a, i) => (
-            <div key={a.id} className={`bg-white border rounded-2xl p-3 text-center animate-pop ${!a.earned ? "opacity-35 grayscale" : "border-border card-hover"}`} style={{ animationDelay: `${i * 0.06}s` }}>
+          {earnedAchievements.map((a, i) => (
+            <div
+              key={a.id}
+              className={`bg-white border rounded-2xl p-3 text-center animate-pop ${!a.earned ? "opacity-35 grayscale border-border" : "border-amber-200 bg-amber-50/50 card-hover"}`}
+              style={{ animationDelay: `${i * 0.06}s` }}
+            >
               <div className="text-3xl mb-1.5">{a.icon}</div>
               <div className="text-xs font-semibold leading-tight">{a.title}</div>
               <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{a.desc}</div>
@@ -575,23 +754,54 @@ function ProfilePage() {
           ))}
         </div>
       </div>
-      <div className="bg-white border border-border rounded-2xl overflow-hidden">
-        {[
-          { icon: "BookOpen", label: "Мои курсы", desc: "3 активных" },
-          { icon: "Bell", label: "Уведомления", desc: "Включены" },
-          { icon: "HelpCircle", label: "Помощь", desc: "" },
-        ].map((item, i, arr) => (
-          <div key={i} className={`flex items-center gap-3 p-4 ${i < arr.length - 1 ? "border-b border-border" : ""} hover:bg-muted/50 transition-colors cursor-pointer`}>
-            <div className="w-9 h-9 bg-muted rounded-xl flex items-center justify-center">
-              <Icon name={item.icon} size={16} className="text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">{item.label}</div>
-              {item.desc && <div className="text-xs text-muted-foreground">{item.desc}</div>}
-            </div>
-            <Icon name="ChevronRight" size={16} className="text-muted-foreground" />
+
+      {/* Последние результаты */}
+      {records.length > 0 && (
+        <div>
+          <h3 className="font-semibold mb-3">Последние тесты</h3>
+          <div className="bg-white border border-border rounded-2xl overflow-hidden">
+            {records.slice(0, 5).map((r, i, arr) => {
+              const pct = Math.round((r.correct / r.total) * 100);
+              return (
+                <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${pct >= 80 ? "bg-emerald-100 text-emerald-700" : pct >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                    {pct}%
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{r.testTitle}</div>
+                    <div className="text-xs text-muted-foreground">{r.correct}/{r.total} верно · {r.date}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
+      )}
+
+      {/* Настройки */}
+      <div className="bg-white border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-3 p-4 border-b border-border">
+          <div className="w-9 h-9 bg-muted rounded-xl flex items-center justify-center">
+            <Icon name="Bell" size={16} className="text-muted-foreground" />
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium">Уведомления</div>
+            <div className="text-xs text-muted-foreground">{profile.notifications ? "Включены" : "Выключены"}</div>
+          </div>
+          <button
+            onClick={toggleNotifications}
+            className={`w-12 h-6 rounded-full transition-colors relative ${profile.notifications ? "bg-primary" : "bg-muted"}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${profile.notifications ? "left-6" : "left-0.5"}`} />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 p-4">
+          <div className="w-9 h-9 bg-muted rounded-xl flex items-center justify-center">
+            <Icon name="HelpCircle" size={16} className="text-muted-foreground" />
+          </div>
+          <div className="flex-1 text-sm font-medium">Помощь</div>
+          <Icon name="ChevronRight" size={16} className="text-muted-foreground" />
+        </div>
       </div>
     </div>
   );
@@ -609,13 +819,28 @@ const NAV: { id: Page; label: string; icon: string }[] = [
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [activeTest, setActiveTest] = useState<TestDef | null>(null);
+  const [records, setRecords] = useState<TestRecord[]>(loadRecords);
 
   const startTest = (t: TestDef) => {
     setActiveTest(t);
     setPage("quiz");
   };
 
-  const finishTest = (_r: QuizResult) => {};
+  const finishTest = (r: QuizResult) => {
+    if (!activeTest) return;
+    const rec: TestRecord = {
+      testId: activeTest.id,
+      testTitle: activeTest.title,
+      correct: r.correct,
+      total: r.total,
+      date: new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
+    };
+    setRecords((prev) => {
+      const next = [rec, ...prev].slice(0, 100);
+      saveRecords(next);
+      return next;
+    });
+  };
 
   const backFromQuiz = () => {
     setActiveTest(null);
@@ -631,7 +856,7 @@ export default function App() {
       case "tests": return <TestsPage startTest={startTest} />;
       case "stats": return <StatsPage />;
       case "levels": return <LevelsPage />;
-      case "profile": return <ProfilePage />;
+      case "profile": return <ProfilePage records={records} />;
     }
   };
 

@@ -1344,11 +1344,12 @@ function LevelsPage({
 }
 
 // ─── Профиль ─────────────────────────────────────────────────────
-function ProfilePage({ records }: { records: TestRecord[] }) {
+function ProfilePage({ records, onReset }: { records: TestRecord[]; onReset: () => void }) {
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(profile.name);
   const [pickingColor, setPickingColor] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
@@ -1533,12 +1534,41 @@ function ProfilePage({ records }: { records: TestRecord[] }) {
             <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${profile.notifications ? "left-6" : "left-0.5"}`} />
           </button>
         </div>
-        <div className="flex items-center gap-3 p-4">
+        <div className="flex items-center gap-3 p-4 border-b border-border">
           <div className="w-9 h-9 bg-muted rounded-xl flex items-center justify-center">
             <Icon name="HelpCircle" size={16} className="text-muted-foreground" />
           </div>
           <div className="flex-1 text-sm font-medium">Помощь</div>
           <Icon name="ChevronRight" size={16} className="text-muted-foreground" />
+        </div>
+        <div className="p-4">
+          {confirmReset ? (
+            <div className="flex items-center gap-2 animate-pop">
+              <span className="text-sm text-rose-600 flex-1">Удалить все данные?</span>
+              <button
+                onClick={onReset}
+                className="px-4 py-1.5 bg-rose-600 text-white text-sm font-semibold rounded-xl"
+              >
+                Да, удалить
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="px-3 py-1.5 bg-muted text-sm rounded-xl"
+              >
+                Отмена
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="flex items-center gap-3 w-full"
+            >
+              <div className="w-9 h-9 bg-rose-50 rounded-xl flex items-center justify-center">
+                <Icon name="Trash2" size={16} className="text-rose-500" />
+              </div>
+              <div className="flex-1 text-sm font-medium text-rose-500 text-left">Сбросить все данные</div>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1602,6 +1632,13 @@ export default function App() {
     });
   };
 
+  const resetAll = () => {
+    localStorage.removeItem("math_records");
+    localStorage.removeItem("math_profile");
+    setRecords([]);
+    setPage("home");
+  };
+
   const backFromQuiz = () => {
     setActiveTest(null);
     setPage("tests");
@@ -1624,7 +1661,7 @@ export default function App() {
       case "tests": return <TestsPage startTest={startTest} records={records} />;
       case "stats": return <StatsPage records={records} />;
       case "levels": return <LevelsPage records={records} onStartLevel={startLevel} />;
-      case "profile": return <ProfilePage records={records} />;
+      case "profile": return <ProfilePage records={records} onReset={resetAll} />;
     }
   };
 

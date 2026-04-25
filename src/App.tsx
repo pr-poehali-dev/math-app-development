@@ -180,13 +180,30 @@ const TESTS: TestDef[] = [
 ];
 
 const ACHIEVEMENTS = [
-  { id: 1, icon: "⚡", title: "Молния", desc: "10 задач за 5 минут", earned: true },
-  { id: 2, icon: "🎯", title: "Снайпер", desc: "5 подряд без ошибок", earned: true },
-  { id: 3, icon: "🔥", title: "7 дней", desc: "Заходи 7 дней подряд", earned: false },
-  { id: 4, icon: "🏆", title: "Чемпион", desc: "Пройди 50 тестов", earned: false },
-  { id: 5, icon: "🌟", title: "Звезда", desc: "100% в тесте", earned: true },
-  { id: 6, icon: "🧮", title: "Мастер", desc: "Реши 500 примеров", earned: false },
+  { id: 1, icon: "⚡", title: "Молния", desc: "Первый тест пройден" },
+  { id: 2, icon: "🎯", title: "Снайпер", desc: "100% правильных ответов" },
+  { id: 3, icon: "🔥", title: "На разогреве", desc: "Пройди 10 тестов" },
+  { id: 4, icon: "🏆", title: "Чемпион", desc: "Пройди 50 тестов" },
+  { id: 5, icon: "🌟", title: "Звезда", desc: "100% в любом тесте" },
+  { id: 6, icon: "🧮", title: "Мастер", desc: "Реши 500 примеров" },
 ];
+
+function getEarnedIds(records: TestRecord[]): Set<number> {
+  const s = new Set<number>();
+  if (records.length >= 1) s.add(1);
+  if (records.some((r) => r.correct / r.total === 1)) s.add(2);
+  if (records.length >= 10) s.add(3);
+  if (records.length >= 50) s.add(4);
+  if (records.some((r) => r.correct === r.total && r.total > 0)) s.add(5);
+  if (records.reduce((acc, r) => acc + r.correct, 0) >= 500) s.add(6);
+  return s;
+}
+
+function checkNewAchievements(before: TestRecord[], after: TestRecord[]) {
+  const prev = getEarnedIds(before);
+  const next = getEarnedIds(after);
+  return ACHIEVEMENTS.filter((a) => !prev.has(a.id) && next.has(a.id));
+}
 
 const WEEK = [
   { day: "Пн", val: 14, max: 16 },
@@ -199,7 +216,8 @@ const WEEK = [
 ];
 
 // ─── Quiz (экран теста) ──────────────────────────────────────────
-interface QuizResult { correct: number; total: number; }
+type AchievementDef = typeof ACHIEVEMENTS[number];
+interface QuizResult { correct: number; total: number; newAchievements?: AchievementDef[]; }
 
 function QuizPage({
   test,
@@ -207,7 +225,7 @@ function QuizPage({
   onBack,
 }: {
   test: TestDef;
-  onFinish: (r: QuizResult) => void;
+  onFinish: (r: QuizResult, onNew: (a: AchievementDef[]) => void) => void;
   onBack: () => void;
 }) {
   const [idx, setIdx] = useState(0);
@@ -216,6 +234,7 @@ function QuizPage({
   const [timeLeft, setTimeLeft] = useState(test.time);
   const [done, setDone] = useState(false);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [newAchievements, setNewAchievements] = useState<AchievementDef[]>([]);
   const q = test.questions[idx];
   const total = test.questions.length;
 
@@ -228,7 +247,7 @@ function QuizPage({
 
       if (idx + 1 >= total) {
         setDone(true);
-        onFinish({ correct: newCorrect, total });
+        onFinish({ correct: newCorrect, total }, (a) => setNewAchievements(a));
       } else {
         setCorrect(newCorrect);
         setIdx(idx + 1);
@@ -281,6 +300,24 @@ function QuizPage({
             </div>
           ))}
         </div>
+        {newAchievements.length > 0 && (
+          <div className="w-full space-y-2">
+            <p className="text-xs font-semibold text-amber-600 text-center uppercase tracking-wide">Новые достижения!</p>
+            {newAchievements.map((a, i) => (
+              <div
+                key={a.id}
+                className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 animate-pop"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <span className="text-3xl">{a.icon}</span>
+                <div>
+                  <div className="font-semibold text-sm text-amber-800">{a.title}</div>
+                  <div className="text-xs text-amber-600">{a.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="w-full flex gap-3">
           <button
             onClick={onBack}
@@ -289,7 +326,7 @@ function QuizPage({
             К тестам
           </button>
           <button
-            onClick={() => { setIdx(0); setSelected(null); setCorrect(0); setTimeLeft(test.time); setDone(false); setAnswers([]); }}
+            onClick={() => { setIdx(0); setSelected(null); setCorrect(0); setTimeLeft(test.time); setDone(false); setAnswers([]); setNewAchievements([]); }}
             className={`flex-1 py-3 rounded-2xl bg-gradient-to-r ${test.gradient} text-white font-semibold text-sm`}
           >
             Повторить
@@ -1105,13 +1142,14 @@ function LevelQuiz({
   onBack,
 }: {
   level: LevelDef;
-  onFinish: (correct: number, total: number) => void;
+  onFinish: (correct: number, total: number, onNew: (a: AchievementDef[]) => void) => void;
   onBack: () => void;
 }) {
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [correct, setCorrect] = useState(0);
   const [done, setDone] = useState(false);
+  const [newAchievements, setNewAchievements] = useState<AchievementDef[]>([]);
   const q = level.questions[idx];
   const total = level.questions.length;
 
@@ -1121,7 +1159,7 @@ function LevelQuiz({
       const newCorrect = correct + (isOk ? 1 : 0);
       if (idx + 1 >= total) {
         setDone(true);
-        onFinish(newCorrect, total);
+        onFinish(newCorrect, total, (a) => setNewAchievements(a));
       } else {
         setCorrect(newCorrect);
         setIdx(idx + 1);
@@ -1161,10 +1199,28 @@ function LevelQuiz({
             Нужно 70%+ чтобы открыть следующий уровень
           </div>
         )}
+        {newAchievements.length > 0 && (
+          <div className="w-full space-y-2">
+            <p className="text-xs font-semibold text-amber-600 text-center uppercase tracking-wide">Новые достижения!</p>
+            {newAchievements.map((a, i) => (
+              <div
+                key={a.id}
+                className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 animate-pop"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <span className="text-3xl">{a.icon}</span>
+                <div>
+                  <div className="font-semibold text-sm text-amber-800">{a.title}</div>
+                  <div className="text-xs text-amber-600">{a.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="w-full flex gap-3">
           <button onClick={onBack} className="flex-1 py-3 rounded-2xl border border-border font-semibold text-sm">К уровням</button>
           <button
-            onClick={() => { setIdx(0); setSelected(null); setCorrect(0); setDone(false); }}
+            onClick={() => { setIdx(0); setSelected(null); setCorrect(0); setDone(false); setNewAchievements([]); }}
             className={`flex-1 py-3 rounded-2xl bg-gradient-to-r ${level.color} text-white font-semibold text-sm`}
           >
             Повторить
@@ -1595,7 +1651,7 @@ export default function App() {
     setPage("quiz");
   };
 
-  const finishTest = (r: QuizResult) => {
+  const finishTest = (r: QuizResult, onNew?: (a: AchievementDef[]) => void) => {
     if (!activeTest) return;
     const rec: TestRecord = {
       testId: activeTest.id,
@@ -1607,6 +1663,7 @@ export default function App() {
     setRecords((prev) => {
       const next = [rec, ...prev].slice(0, 100);
       saveRecords(next);
+      onNew?.(checkNewAchievements(prev, next));
       return next;
     });
   };
@@ -1616,7 +1673,7 @@ export default function App() {
     setPage("level-quiz");
   };
 
-  const finishLevel = (correct: number, total: number) => {
+  const finishLevel = (correct: number, total: number, onNew?: (a: AchievementDef[]) => void) => {
     if (!activeLevel) return;
     const rec: TestRecord = {
       testId: -activeLevel.id,
@@ -1628,6 +1685,7 @@ export default function App() {
     setRecords((prev) => {
       const next = [rec, ...prev].slice(0, 100);
       saveRecords(next);
+      onNew?.(checkNewAchievements(prev, next));
       return next;
     });
   };
